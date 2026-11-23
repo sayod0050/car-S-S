@@ -1,7 +1,7 @@
 /**
- * Procedural Web Audio synthesizer for Street Rush 3D.
- * Zero external audio files — generates engine purr, nitro boost, coin chimes,
- * crash impact, UI clicks, and a driving synth-arcade soundtrack.
+ * Procedural Web Audio synthesizer for S&S Racing.
+ * Generates engine purr, tire drift screech, countdown tones, nitro boost,
+ * collision crunch, coin/victory fanfare, and high-energy racing music.
  */
 class SoundEngine {
   private ctx: AudioContext | null = null;
@@ -9,16 +9,16 @@ class SoundEngine {
   private sfxGain: GainNode | null = null;
   private musicGain: GainNode | null = null;
 
-  // Continuous engine nodes
   private engineOsc1: OscillatorNode | null = null;
   private engineOsc2: OscillatorNode | null = null;
   private engineFilter: BiquadFilterNode | null = null;
   private engineGain: GainNode | null = null;
 
-  // Noise buffer cache
-  private noiseBuffer: AudioBuffer | null = null;
+  private driftSource: AudioBufferSourceNode | null = null;
+  private driftFilter: BiquadFilterNode | null = null;
+  private driftGain: GainNode | null = null;
 
-  // Music sequencer
+  private noiseBuffer: AudioBuffer | null = null;
   private musicTimerId: number | null = null;
   private musicStep = 0;
 
@@ -36,19 +36,19 @@ class SoundEngine {
 
       this.ctx = new AudioCtx();
       this.masterGain = this.ctx.createGain();
-      this.masterGain.gain.value = 0.8;
+      this.masterGain.gain.value = 0.82;
       this.masterGain.connect(this.ctx.destination);
 
       this.sfxGain = this.ctx.createGain();
-      this.sfxGain.gain.value = this.soundEnabled ? 0.75 : 0;
+      this.sfxGain.gain.value = this.soundEnabled ? 0.78 : 0;
       this.sfxGain.connect(this.masterGain);
 
       this.musicGain = this.ctx.createGain();
-      this.musicGain.gain.value = this.musicEnabled ? 0.26 : 0;
+      this.musicGain.gain.value = this.musicEnabled ? 0.25 : 0;
       this.musicGain.connect(this.masterGain);
 
       this.createNoiseBuffer();
-      this.setupEngineNodes();
+      this.setupEngineAndDriftNodes();
     }
     return this.ctx;
   }
@@ -56,7 +56,7 @@ class SoundEngine {
   private createNoiseBuffer(): void {
     if (!this.ctx) return;
     const sampleRate = this.ctx.sampleRate;
-    const length = sampleRate * 1.5;
+    const length = sampleRate * 2;
     const buffer = this.ctx.createBuffer(1, length, sampleRate);
     const data = buffer.getChannelData(0);
     for (let i = 0; i < length; i++) {
@@ -65,15 +65,16 @@ class SoundEngine {
     this.noiseBuffer = buffer;
   }
 
-  private setupEngineNodes(): void {
-    if (!this.ctx || !this.sfxGain) return;
+  private setupEngineAndDriftNodes(): void {
+    if (!this.ctx || !this.sfxGain || !this.noiseBuffer) return;
+
     this.engineGain = this.ctx.createGain();
     this.engineGain.gain.value = 0;
 
     this.engineFilter = this.ctx.createBiquadFilter();
     this.engineFilter.type = 'lowpass';
     this.engineFilter.frequency.value = 260;
-    this.engineFilter.Q.value = 2.4;
+    this.engineFilter.Q.value = 2.6;
 
     this.engineOsc1 = this.ctx.createOscillator();
     this.engineOsc1.type = 'sawtooth';
@@ -90,6 +91,24 @@ class SoundEngine {
 
     this.engineOsc1.start();
     this.engineOsc2.start();
+
+    // Continuous drift tire screech loop
+    this.driftGain = this.ctx.createGain();
+    this.driftGain.gain.value = 0;
+
+    this.driftFilter = this.ctx.createBiquadFilter();
+    this.driftFilter.type = 'bandpass';
+    this.driftFilter.frequency.value = 1650;
+    this.driftFilter.Q.value = 5.5;
+
+    this.driftSource = this.ctx.createBufferSource();
+    this.driftSource.buffer = this.noiseBuffer;
+    this.driftSource.loop = true;
+
+    this.driftSource.connect(this.driftFilter);
+    this.driftFilter.connect(this.driftGain);
+    this.driftGain.connect(this.sfxGain);
+    this.driftSource.start();
   }
 
   public unlock(): void {
@@ -107,30 +126,49 @@ class SoundEngine {
     if (!this.ctx) return;
     const now = this.ctx.currentTime;
     if (this.sfxGain) {
-      this.sfxGain.gain.setTargetAtTime(soundEnabled ? 0.75 : 0, now, 0.04);
+      this.sfxGain.gain.setTargetAtTime(soundEnabled ? 0.78 : 0, now, 0.04);
     }
     if (this.musicGain) {
-      this.musicGain.gain.setTargetAtTime(musicEnabled ? 0.26 : 0, now, 0.08);
+      this.musicGain.gain.setTargetAtTime(musicEnabled ? 0.25 : 0, now, 0.08);
     }
   }
 
-  public updateEngine(speedKmh: number, isBoosting: boolean, active: boolean): void {
-    if (!this.ctx || !this.engineGain || !this.engineOsc1 || !this.engineOsc2 || !this.engineFilter) {
+  public updateEngine(
+    speedKmh: number,
+    isBoosting: boolean,
+    isDrifting: boolean,
+    active: boolean
+  ): void {
+    if (
+      !this.ctx ||
+      !this.engineGain ||
+      !this.engineOsc1 ||
+      !this.engineOsc2 ||
+      !this.engineFilter ||
+      !this.driftGain
+    ) {
       return;
     }
     const now = this.ctx.currentTime;
     if (!active || !this.soundEnabled) {
       this.engineGain.gain.setTargetAtTime(0, now, 0.06);
+      this.driftGain.gain.setTargetAtTime(0, now, 0.05);
       this.wasBoosting = false;
       return;
     }
 
-    const normSpeed = Math.max(0, Math.min(1.6, speedKmh / 220));
-    const baseFreq = 46 + normSpeed * 78 + (isBoosting ? 24 : 0);
+    const normSpeed = Math.max(0, Math.min(1.6, speedKmh / 230));
+    const baseFreq = 44 + normSpeed * 84 + (isBoosting ? 28 : 0);
     this.engineOsc1.frequency.setTargetAtTime(baseFreq, now, 0.05);
     this.engineOsc2.frequency.setTargetAtTime(baseFreq * 1.98, now, 0.05);
-    this.engineFilter.frequency.setTargetAtTime(220 + normSpeed * 520 + (isBoosting ? 420 : 0), now, 0.05);
-    this.engineGain.gain.setTargetAtTime(0.085 + normSpeed * 0.045, now, 0.06);
+    this.engineFilter.frequency.setTargetAtTime(
+      210 + normSpeed * 560 + (isBoosting ? 460 : 0),
+      now,
+      0.05
+    );
+    this.engineGain.gain.setTargetAtTime(0.08 + normSpeed * 0.055, now, 0.05);
+
+    this.driftGain.gain.setTargetAtTime(isDrifting ? 0.095 : 0, now, 0.04);
 
     if (isBoosting && !this.wasBoosting) {
       this.playNitro();
@@ -138,19 +176,37 @@ class SoundEngine {
     this.wasBoosting = isBoosting;
   }
 
+  public playCountdown(isGo: boolean): void {
+    const ctx = this.ensureContext();
+    if (!ctx || !this.sfxGain || !this.soundEnabled) return;
+    const now = ctx.currentTime;
+
+    const osc = ctx.createOscillator();
+    osc.type = isGo ? 'sawtooth' : 'sine';
+    osc.frequency.setValueAtTime(isGo ? 880 : 440, now);
+
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(isGo ? 0.22 : 0.16, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + (isGo ? 0.45 : 0.22));
+
+    osc.connect(gain);
+    gain.connect(this.sfxGain);
+    osc.start(now);
+    osc.stop(now + (isGo ? 0.46 : 0.24));
+  }
+
   public playNitro(): void {
     const ctx = this.ensureContext();
     if (!ctx || !this.sfxGain || !this.soundEnabled || !this.noiseBuffer) return;
 
     const now = ctx.currentTime;
-    // Turbine air rush
     const src = ctx.createBufferSource();
     src.buffer = this.noiseBuffer;
 
     const filter = ctx.createBiquadFilter();
     filter.type = 'bandpass';
-    filter.frequency.setValueAtTime(320, now);
-    filter.frequency.exponentialRampToValueAtTime(1900, now + 0.32);
+    filter.frequency.setValueAtTime(340, now);
+    filter.frequency.exponentialRampToValueAtTime(2100, now + 0.32);
     filter.Q.value = 1.6;
 
     const gain = ctx.createGain();
@@ -164,11 +220,10 @@ class SoundEngine {
     src.start(now);
     src.stop(now + 0.56);
 
-    // Rising synth turbine
     const osc = ctx.createOscillator();
     osc.type = 'sine';
-    osc.frequency.setValueAtTime(220, now);
-    osc.frequency.exponentialRampToValueAtTime(660, now + 0.35);
+    osc.frequency.setValueAtTime(240, now);
+    osc.frequency.exponentialRampToValueAtTime(700, now + 0.35);
 
     const oscGain = ctx.createGain();
     oscGain.gain.setValueAtTime(0.09, now);
@@ -180,112 +235,42 @@ class SoundEngine {
     osc.stop(now + 0.4);
   }
 
-  public playCoin(streak = 0): void {
-    const ctx = this.ensureContext();
-    if (!ctx || !this.sfxGain || !this.soundEnabled) return;
-
-    const now = ctx.currentTime;
-    const pitchBoost = Math.min(streak, 8) * 35;
-
-    const osc1 = ctx.createOscillator();
-    osc1.type = 'sine';
-    osc1.frequency.setValueAtTime(987.77 + pitchBoost, now); // B5
-    osc1.frequency.setValueAtTime(1318.51 + pitchBoost, now + 0.055); // E6
-
-    const gain = ctx.createGain();
-    gain.gain.setValueAtTime(0.18, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.24);
-
-    osc1.connect(gain);
-    gain.connect(this.sfxGain);
-    osc1.start(now);
-    osc1.stop(now + 0.25);
-  }
-
-  public playSwipe(): void {
-    const ctx = this.ensureContext();
-    if (!ctx || !this.sfxGain || !this.soundEnabled) return;
-
-    const now = ctx.currentTime;
-    const osc = ctx.createOscillator();
-    osc.type = 'triangle';
-    osc.frequency.setValueAtTime(280, now);
-    osc.frequency.exponentialRampToValueAtTime(140, now + 0.08);
-
-    const gain = ctx.createGain();
-    gain.gain.setValueAtTime(0.08, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.085);
-
-    osc.connect(gain);
-    gain.connect(this.sfxGain);
-    osc.start(now);
-    osc.stop(now + 0.09);
-  }
-
-  public playNearMiss(): void {
+  public playCrash(heavy = false): void {
     const ctx = this.ensureContext();
     if (!ctx || !this.sfxGain || !this.soundEnabled || !this.noiseBuffer) return;
 
     const now = ctx.currentTime;
-    const src = ctx.createBufferSource();
-    src.buffer = this.noiseBuffer;
-
-    const filter = ctx.createBiquadFilter();
-    filter.type = 'bandpass';
-    filter.frequency.setValueAtTime(1400, now);
-    filter.frequency.exponentialRampToValueAtTime(280, now + 0.2);
-    filter.Q.value = 3;
-
-    const gain = ctx.createGain();
-    gain.gain.setValueAtTime(0.22, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
-
-    src.connect(filter);
-    filter.connect(gain);
-    gain.connect(this.sfxGain);
-    src.start(now);
-    src.stop(now + 0.23);
-  }
-
-  public playCrash(): void {
-    const ctx = this.ensureContext();
-    if (!ctx || !this.sfxGain || !this.soundEnabled || !this.noiseBuffer) return;
-
-    const now = ctx.currentTime;
-
-    // Low-end impact thud
     const sub = ctx.createOscillator();
     sub.type = 'sawtooth';
-    sub.frequency.setValueAtTime(150, now);
-    sub.frequency.exponentialRampToValueAtTime(32, now + 0.45);
+    sub.frequency.setValueAtTime(heavy ? 150 : 120, now);
+    sub.frequency.exponentialRampToValueAtTime(38, now + (heavy ? 0.4 : 0.2));
 
     const subGain = ctx.createGain();
-    subGain.gain.setValueAtTime(0.45, now);
-    subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+    subGain.gain.setValueAtTime(heavy ? 0.4 : 0.24, now);
+    subGain.gain.exponentialRampToValueAtTime(0.001, now + (heavy ? 0.42 : 0.22));
 
     sub.connect(subGain);
     subGain.connect(this.sfxGain);
     sub.start(now);
-    sub.stop(now + 0.52);
+    sub.stop(now + 0.44);
 
-    // Metallic crunch noise
     const src = ctx.createBufferSource();
     src.buffer = this.noiseBuffer;
 
     const filter = ctx.createBiquadFilter();
     filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(2200, now);
-    filter.frequency.exponentialRampToValueAtTime(180, now + 0.75);
+    filter.frequency.setValueAtTime(2000, now);
+    filter.frequency.exponentialRampToValueAtTime(240, now + (heavy ? 0.6 : 0.24));
 
     const nGain = ctx.createGain();
-    nGain.gain.setValueAtTime(0.55, now);
-    nGain.gain.exponentialRampToValueAtTime(0.001, now + 0.8);
+    nGain.gain.setValueAtTime(heavy ? 0.42 : 0.22, now);
+    nGain.gain.exponentialRampToValueAtTime(0.001, now + (heavy ? 0.62 : 0.25));
 
     src.connect(filter);
     filter.connect(nGain);
     nGain.connect(this.sfxGain);
     src.start(now);
-    src.stop(now + 0.82);
+    src.stop(now + 0.64);
   }
 
   public playButton(): void {
@@ -295,8 +280,8 @@ class SoundEngine {
     const now = ctx.currentTime;
     const osc = ctx.createOscillator();
     osc.type = 'sine';
-    osc.frequency.setValueAtTime(620, now);
-    osc.frequency.exponentialRampToValueAtTime(840, now + 0.05);
+    osc.frequency.setValueAtTime(600, now);
+    osc.frequency.exponentialRampToValueAtTime(860, now + 0.05);
 
     const gain = ctx.createGain();
     gain.gain.setValueAtTime(0.11, now);
@@ -313,7 +298,7 @@ class SoundEngine {
     if (!ctx || !this.sfxGain || !this.soundEnabled) return;
 
     const now = ctx.currentTime;
-    const notes = [523.25, 659.25, 783.99, 1046.5]; // C5 E5 G5 C6
+    const notes = [523.25, 659.25, 783.99, 1046.5];
     notes.forEach((freq, idx) => {
       const start = now + idx * 0.07;
       const osc = ctx.createOscillator();
@@ -331,10 +316,37 @@ class SoundEngine {
     });
   }
 
+  public playVictory(): void {
+    const ctx = this.ensureContext();
+    if (!ctx || !this.sfxGain || !this.soundEnabled) return;
+
+    const now = ctx.currentTime;
+    const notes = [523.25, 659.25, 783.99, 1046.5, 1318.51];
+    notes.forEach((freq, idx) => {
+      const start = now + idx * 0.09;
+      const osc = ctx.createOscillator();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(freq, start);
+
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.value = 2600;
+
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.14, start);
+      gain.gain.exponentialRampToValueAtTime(0.001, start + 0.36);
+
+      osc.connect(filter);
+      filter.connect(gain);
+      gain.connect(this.sfxGain!);
+      osc.start(start);
+      osc.stop(start + 0.38);
+    });
+  }
+
   private startMusicLoop(): void {
     if (this.musicTimerId !== null) return;
-    // 132 BPM 16th-note step = ~113.6ms
-    const stepMs = 114;
+    const stepMs = 112;
     const bassPattern = [
       55, 0, 55, 55, 65.41, 0, 65.41, 65.41,
       73.42, 0, 73.42, 73.42, 65.41, 0, 82.41, 73.42,
@@ -352,7 +364,6 @@ class SoundEngine {
       const step = this.musicStep % 16;
       this.musicStep++;
 
-      // Kick drum on quarter beats
       if (step % 4 === 0) {
         const kick = this.ctx.createOscillator();
         kick.type = 'sine';
@@ -369,7 +380,6 @@ class SoundEngine {
         kick.stop(now + 0.12);
       }
 
-      // Off-beat crisp hi-hat
       if (step % 4 === 2 && this.noiseBuffer) {
         const hat = this.ctx.createBufferSource();
         hat.buffer = this.noiseBuffer;
@@ -377,7 +387,7 @@ class SoundEngine {
         hp.type = 'highpass';
         hp.frequency.value = 6500;
         const hGain = this.ctx.createGain();
-        hGain.gain.setValueAtTime(0.08, now);
+        hGain.gain.setValueAtTime(0.075, now);
         hGain.gain.exponentialRampToValueAtTime(0.001, now + 0.045);
         hat.connect(hp);
         hp.connect(hGain);
@@ -386,7 +396,6 @@ class SoundEngine {
         hat.stop(now + 0.05);
       }
 
-      // Driving synth bass
       const bassFreq = bassPattern[step];
       if (bassFreq > 0) {
         const bass = this.ctx.createOscillator();
@@ -395,7 +404,7 @@ class SoundEngine {
 
         const filter = this.ctx.createBiquadFilter();
         filter.type = 'lowpass';
-        filter.frequency.setValueAtTime(420, now);
+        filter.frequency.setValueAtTime(430, now);
 
         const bGain = this.ctx.createGain();
         bGain.gain.setValueAtTime(0.18, now);
@@ -408,7 +417,6 @@ class SoundEngine {
         bass.stop(now + 0.11);
       }
 
-      // Sunlit arcade arpeggio lead
       const leadFreq = leadPattern[step];
       if (leadFreq > 0) {
         const lead = this.ctx.createOscillator();
@@ -416,7 +424,7 @@ class SoundEngine {
         lead.frequency.setValueAtTime(leadFreq, now);
 
         const lGain = this.ctx.createGain();
-        lGain.gain.setValueAtTime(0.085, now);
+        lGain.gain.setValueAtTime(0.08, now);
         lGain.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
 
         lead.connect(lGain);

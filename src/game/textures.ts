@@ -1,196 +1,205 @@
 import * as THREE from 'three';
+import { MapId } from '../types/game';
 
-export interface ProceduralTextureSet {
+export interface RacingTextureSet {
   asphaltMap: THREE.CanvasTexture;
-  asphaltRoughnessMap: THREE.CanvasTexture;
-  buildingTextures: THREE.CanvasTexture[];
+  kerbMap: THREE.CanvasTexture;
+  finishMap: THREE.CanvasTexture;
+  buildingDayMap: THREE.CanvasTexture;
+  buildingNightMap: THREE.CanvasTexture;
   contactShadowMap: THREE.CanvasTexture;
-  skyTexture: THREE.CanvasTexture;
-  oceanTexture: THREE.CanvasTexture;
+  skyTextures: Record<MapId, THREE.CanvasTexture>;
   dispose: () => void;
 }
 
-export function createProceduralTextures(maxAnisotropy: number): ProceduralTextureSet {
+function makeSkyGradient(stops: [number, string][], stars = false): THREE.CanvasTexture {
+  const c = document.createElement('canvas');
+  c.width = stars ? 256 : 32;
+  c.height = 256;
+  const ctx = c.getContext('2d')!;
+  const grad = ctx.createLinearGradient(0, 0, 0, 256);
+  for (const [offset, color] of stops) {
+    grad.addColorStop(offset, color);
+  }
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, c.width, 256);
+
+  if (stars) {
+    for (let i = 0; i < 140; i++) {
+      const x = Math.random() * 256;
+      const y = Math.random() * 145;
+      const r = Math.random() * 1.4 + 0.4;
+      ctx.fillStyle = `rgba(255,255,255,${0.4 + Math.random() * 0.6})`;
+      ctx.fillRect(x, y, r, r);
+    }
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+export function createRacingTextures(maxAnisotropy: number): RacingTextureSet {
   const anisotropy = Math.min(maxAnisotropy, 8);
 
-  // 1. 3-Lane Highway Asphalt Texture
+  // 1. 4-Lane Racing Asphalt
   const roadCanvas = document.createElement('canvas');
   roadCanvas.width = 512;
   roadCanvas.height = 512;
   const rCtx = roadCanvas.getContext('2d')!;
-
-  // Base tarmac
-  rCtx.fillStyle = '#2d333d';
+  rCtx.fillStyle = '#262b34';
   rCtx.fillRect(0, 0, 512, 512);
 
-  // Subtle tire wear bands along the 3 lanes (centered at 1/6, 3/6, 5/6)
-  const laneCenters = [512 * (1 / 6), 512 * 0.5, 512 * (5 / 6)];
-  for (const cx of laneCenters) {
-    const grad = rCtx.createLinearGradient(cx - 52, 0, cx + 52, 0);
-    grad.addColorStop(0, 'rgba(20, 24, 30, 0)');
-    grad.addColorStop(0.28, 'rgba(18, 22, 28, 0.28)');
-    grad.addColorStop(0.5, 'rgba(25, 30, 36, 0.05)');
-    grad.addColorStop(0.72, 'rgba(18, 22, 28, 0.28)');
-    grad.addColorStop(1, 'rgba(20, 24, 30, 0)');
-    rCtx.fillStyle = grad;
-    rCtx.fillRect(cx - 55, 0, 110, 512);
-  }
-
-  // Asphalt aggregate speckle
   for (let i = 0; i < 6500; i++) {
-    const x = Math.random() * 512;
-    const y = Math.random() * 512;
-    const shade = 36 + Math.floor(Math.random() * 34);
-    rCtx.fillStyle = `rgb(${shade}, ${shade + 2}, ${shade + 6})`;
-    rCtx.fillRect(x, y, 2, 2);
+    const shade = 30 + Math.floor(Math.random() * 28);
+    rCtx.fillStyle = `rgb(${shade},${shade + 2},${shade + 5})`;
+    rCtx.fillRect(Math.random() * 512, Math.random() * 512, 2, 2);
   }
 
-  // Solid outer shoulder lines (amber left, crisp white right)
-  rCtx.fillStyle = '#facc15';
-  rCtx.fillRect(14, 0, 10, 512);
+  // Outer white track boundary lines
   rCtx.fillStyle = '#f8fafc';
-  rCtx.fillRect(488, 0, 10, 512);
+  rCtx.fillRect(10, 0, 10, 512);
+  rCtx.fillRect(492, 0, 10, 512);
 
-  // Dashed lane dividers at 1/3 and 2/3
-  rCtx.fillStyle = '#f8fafc';
-  const div1 = Math.round(512 / 3);
-  const div2 = Math.round((512 * 2) / 3);
-  for (let y = 16; y < 512; y += 128) {
-    rCtx.fillRect(div1 - 5, y, 10, 68);
-    rCtx.fillRect(div2 - 5, y, 10, 68);
+  // Dashed lane lines across 4 lanes
+  rCtx.fillStyle = 'rgba(248, 250, 252, 0.78)';
+  const divs = [128, 256, 384];
+  for (const dx of divs) {
+    for (let y = 16; y < 512; y += 128) {
+      rCtx.fillRect(dx - 3, y, 6, 60);
+    }
   }
 
   const asphaltMap = new THREE.CanvasTexture(roadCanvas);
   asphaltMap.colorSpace = THREE.SRGBColorSpace;
   asphaltMap.wrapS = THREE.ClampToEdgeWrapping;
   asphaltMap.wrapT = THREE.RepeatWrapping;
-  asphaltMap.repeat.set(1, 3);
   asphaltMap.anisotropy = anisotropy;
 
-  // Roughness map for subtle road specular shimmer
-  const roughCanvas = document.createElement('canvas');
-  roughCanvas.width = 256;
-  roughCanvas.height = 256;
-  const rgCtx = roughCanvas.getContext('2d')!;
-  rgCtx.fillStyle = '#c8c8c8';
-  rgCtx.fillRect(0, 0, 256, 256);
-  for (let i = 0; i < 2400; i++) {
-    const v = 165 + Math.floor(Math.random() * 70);
-    rgCtx.fillStyle = `rgb(${v},${v},${v})`;
-    rgCtx.fillRect(Math.random() * 256, Math.random() * 256, 2, 2);
+  // 2. Red & White FIA Racing Kerbs
+  const kerbCanvas = document.createElement('canvas');
+  kerbCanvas.width = 64;
+  kerbCanvas.height = 256;
+  const kCtx = kerbCanvas.getContext('2d')!;
+  for (let y = 0; y < 256; y += 64) {
+    kCtx.fillStyle = (y / 64) % 2 === 0 ? '#ef4444' : '#f8fafc';
+    kCtx.fillRect(0, y, 64, 64);
   }
-  const asphaltRoughnessMap = new THREE.CanvasTexture(roughCanvas);
-  asphaltRoughnessMap.wrapS = THREE.RepeatWrapping;
-  asphaltRoughnessMap.wrapT = THREE.RepeatWrapping;
-  asphaltRoughnessMap.repeat.set(1, 3);
+  const kerbMap = new THREE.CanvasTexture(kerbCanvas);
+  kerbMap.colorSpace = THREE.SRGBColorSpace;
+  kerbMap.wrapS = THREE.RepeatWrapping;
+  kerbMap.wrapT = THREE.RepeatWrapping;
+  kerbMap.anisotropy = anisotropy;
 
-  // 2. Modern Sunlit Coastal City Building Facade Textures
-  const palettes = [
-    { wall: '#e2e8f0', frame: '#94a3b8', glass: '#38bdf8', glassReflect: '#bae6fd' },
-    { wall: '#f1f5f9', frame: '#64748b', glass: '#0284c7', glassReflect: '#7dd3fc' },
-    { wall: '#fef3c7', frame: '#d97706', glass: '#0ea5e9', glassReflect: '#e0f2fe' },
-  ];
+  // 3. Checkered Finish Line Texture
+  const finCanvas = document.createElement('canvas');
+  finCanvas.width = 512;
+  finCanvas.height = 128;
+  const fCtx = finCanvas.getContext('2d')!;
+  const sq = 32;
+  for (let r = 0; r < 4; r++) {
+    for (let c = 0; c < 16; c++) {
+      fCtx.fillStyle = (r + c) % 2 === 0 ? '#0f172a' : '#ffffff';
+      fCtx.fillRect(c * sq, r * sq, sq, sq);
+    }
+  }
+  const finishMap = new THREE.CanvasTexture(finCanvas);
+  finishMap.colorSpace = THREE.SRGBColorSpace;
+  finishMap.anisotropy = anisotropy;
 
-  const buildingTextures = palettes.map((pal) => {
+  // 4. Day & Night Building Textures
+  const makeBldg = (night: boolean) => {
     const c = document.createElement('canvas');
     c.width = 256;
     c.height = 512;
     const ctx = c.getContext('2d')!;
-    ctx.fillStyle = pal.wall;
+    ctx.fillStyle = night ? '#0f172a' : '#e2e8f0';
     ctx.fillRect(0, 0, 256, 512);
-
-    const cols = 4;
-    const rows = 10;
-    const padX = 14;
-    const padY = 12;
-    const winW = (256 - padX * (cols + 1)) / cols;
-    const winH = (512 - padY * (rows + 1)) / rows;
-
-    for (let r = 0; r < rows; r++) {
-      for (let col = 0; col < cols; col++) {
-        const x = padX + col * (winW + padX);
-        const y = padY + r * (winH + padY);
-        ctx.fillStyle = pal.frame;
-        ctx.fillRect(x - 2, y - 2, winW + 4, winH + 4);
-
-        const grad = ctx.createLinearGradient(x, y, x + winW, y + winH);
-        grad.addColorStop(0, pal.glassReflect);
-        grad.addColorStop(1, pal.glass);
-        ctx.fillStyle = grad;
-        ctx.fillRect(x, y, winW, winH);
+    for (let r = 0; r < 12; r++) {
+      for (let col = 0; col < 5; col++) {
+        const x = 12 + col * 47;
+        const y = 12 + r * 41;
+        if (night) {
+          const lit = Math.random() > 0.35;
+          ctx.fillStyle = lit
+            ? Math.random() > 0.5
+              ? '#38bdf8'
+              : '#fde047'
+            : '#1e293b';
+        } else {
+          ctx.fillStyle = '#0284c7';
+        }
+        ctx.fillRect(x, y, 34, 28);
       }
     }
-
     const tex = new THREE.CanvasTexture(c);
     tex.colorSpace = THREE.SRGBColorSpace;
-    tex.wrapS = THREE.RepeatWrapping;
-    tex.wrapT = THREE.RepeatWrapping;
     tex.anisotropy = anisotropy;
     return tex;
-  });
+  };
+  const buildingDayMap = makeBldg(false);
+  const buildingNightMap = makeBldg(true);
 
-  // 3. Soft Contact Shadow Radial Texture
-  const shadowCanvas = document.createElement('canvas');
-  shadowCanvas.width = 128;
-  shadowCanvas.height = 128;
-  const sCtx = shadowCanvas.getContext('2d')!;
-  const sGrad = sCtx.createRadialGradient(64, 64, 10, 64, 64, 60);
-  sGrad.addColorStop(0, 'rgba(8, 15, 30, 0.72)');
-  sGrad.addColorStop(0.55, 'rgba(8, 15, 30, 0.36)');
-  sGrad.addColorStop(1, 'rgba(8, 15, 30, 0)');
-  sCtx.fillStyle = sGrad;
+  // 5. Contact Shadow
+  const sCanvas = document.createElement('canvas');
+  sCanvas.width = 128;
+  sCanvas.height = 128;
+  const sCtx = sCanvas.getContext('2d')!;
+  const sg = sCtx.createRadialGradient(64, 64, 12, 64, 64, 60);
+  sg.addColorStop(0, 'rgba(6, 10, 20, 0.78)');
+  sg.addColorStop(0.6, 'rgba(6, 10, 20, 0.35)');
+  sg.addColorStop(1, 'rgba(6, 10, 20, 0)');
+  sCtx.fillStyle = sg;
   sCtx.fillRect(0, 0, 128, 128);
-  const contactShadowMap = new THREE.CanvasTexture(shadowCanvas);
+  const contactShadowMap = new THREE.CanvasTexture(sCanvas);
 
-  // 4. Sunlit Daytime Coastal Sky Dome Gradient
-  const skyCanvas = document.createElement('canvas');
-  skyCanvas.width = 32;
-  skyCanvas.height = 256;
-  const skyCtx = skyCanvas.getContext('2d')!;
-  const skyGrad = skyCtx.createLinearGradient(0, 0, 0, 256);
-  skyGrad.addColorStop(0, '#0284c7'); // Rich zenith azure
-  skyGrad.addColorStop(0.45, '#38bdf8'); // Bright mid sky
-  skyGrad.addColorStop(0.82, '#bae6fd'); // Sunlit coastal haze
-  skyGrad.addColorStop(1, '#e0f2fe'); // Horizon match
-  skyCtx.fillStyle = skyGrad;
-  skyCtx.fillRect(0, 0, 32, 256);
-  const skyTexture = new THREE.CanvasTexture(skyCanvas);
-  skyTexture.colorSpace = THREE.SRGBColorSpace;
-
-  // 5. Shimmering Coastal Ocean Water Texture
-  const oceanCanvas = document.createElement('canvas');
-  oceanCanvas.width = 256;
-  oceanCanvas.height = 256;
-  const oCtx = oceanCanvas.getContext('2d')!;
-  oCtx.fillStyle = '#0ea5e9';
-  oCtx.fillRect(0, 0, 256, 256);
-  for (let i = 0; i < 180; i++) {
-    const x = Math.random() * 256;
-    const y = Math.random() * 256;
-    const w = 14 + Math.random() * 28;
-    oCtx.fillStyle = i % 3 === 0 ? 'rgba(224, 242, 254, 0.45)' : 'rgba(56, 189, 248, 0.5)';
-    oCtx.fillRect(x, y, w, 2);
-  }
-  const oceanTexture = new THREE.CanvasTexture(oceanCanvas);
-  oceanTexture.colorSpace = THREE.SRGBColorSpace;
-  oceanTexture.wrapS = THREE.RepeatWrapping;
-  oceanTexture.wrapT = THREE.RepeatWrapping;
-  oceanTexture.repeat.set(8, 24);
+  // 6. Sky Gradients per Map
+  const skyTextures: Record<MapId, THREE.CanvasTexture> = {
+    city: makeSkyGradient([
+      [0, '#0284c7'],
+      [0.5, '#38bdf8'],
+      [1, '#e0f2fe'],
+    ]),
+    desert: makeSkyGradient([
+      [0, '#0369a1'],
+      [0.45, '#f59e0b'],
+      [1, '#fef3c7'],
+    ]),
+    mountain: makeSkyGradient([
+      [0, '#1d4ed8'],
+      [0.55, '#60a5fa'],
+      [1, '#e2e8f0'],
+    ]),
+    forest: makeSkyGradient([
+      [0, '#0f766e'],
+      [0.5, '#5eead4'],
+      [1, '#dcfce7'],
+    ]),
+    night: makeSkyGradient(
+      [
+        [0, '#020617'],
+        [0.55, '#0f172a'],
+        [1, '#1e1b4b'],
+      ],
+      true
+    ),
+  };
 
   return {
     asphaltMap,
-    asphaltRoughnessMap,
-    buildingTextures,
+    kerbMap,
+    finishMap,
+    buildingDayMap,
+    buildingNightMap,
     contactShadowMap,
-    skyTexture,
-    oceanTexture,
+    skyTextures,
     dispose: () => {
       asphaltMap.dispose();
-      asphaltRoughnessMap.dispose();
-      buildingTextures.forEach((t) => t.dispose());
+      kerbMap.dispose();
+      finishMap.dispose();
+      buildingDayMap.dispose();
+      buildingNightMap.dispose();
       contactShadowMap.dispose();
-      skyTexture.dispose();
-      oceanTexture.dispose();
+      Object.values(skyTextures).forEach((t) => t.dispose());
     },
   };
 }

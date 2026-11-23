@@ -15,12 +15,14 @@ export const PauseModal: React.FC<PauseModalProps> = ({
   onHome,
 }) => {
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/75 p-4">
+    <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/78 p-4">
       <div className="w-full max-w-sm rounded-2xl bg-slate-900 border border-white/15 p-6 shadow-2xl">
         <div className="text-center">
-          <p className="text-xs font-bold uppercase tracking-widest text-sky-400">Race Paused</p>
+          <p className="text-xs font-bold uppercase tracking-widest text-cyan-400">
+            S&amp;S Racing
+          </p>
           <h2 className="mt-1 font-display text-3xl font-bold uppercase text-white">
-            Pit Stop
+            Race Paused
           </h2>
         </div>
 
@@ -40,7 +42,7 @@ export const PauseModal: React.FC<PauseModalProps> = ({
             className="flex items-center justify-center gap-2 rounded-xl bg-slate-800 border border-white/10 py-3 font-display text-base font-bold uppercase tracking-wider text-white hover:bg-slate-700 active:scale-95 transition"
           >
             <RotateCcw className="w-4 h-4" />
-            Restart
+            Restart Race
           </button>
 
           <button

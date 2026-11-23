@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-echo "=== Building Street Rush 3D Web Bundle ==="
+echo "=== Building S&S Racing (S&S Studios) Web Bundle ==="
 npm install
 npm run build
 
@@ -11,7 +11,7 @@ if [ ! -d "android" ]; then
   npx cap add android
 fi
 
-echo "=== Syncing Web Assets to Android Project ==="
+echo "=== Syncing Assets to Android Project ==="
 npx cap sync android
 
 echo "=== Building Debug APK ==="
@@ -21,6 +21,3 @@ cd android
 echo ""
 echo "Debug APK generated at:"
 echo "  android/app/build/outputs/apk/debug/app-debug.apk"
-echo ""
-echo "To build a Release APK (after configuring signing in android/app/build.gradle):"
-echo "  cd android && ./gradlew assembleRelease"

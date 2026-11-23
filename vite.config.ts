@@ -15,9 +15,9 @@ export default defineConfig(() => {
         includeAssets: ['icon.svg', 'apple-touch-icon.png', 'pwa-192x192.png', 'pwa-512x512.png', 'pwa-maskable-512x512.png'],
         manifest: {
           id: '/',
-          name: 'Street Rush 3D',
-          short_name: 'Street Rush',
-          description: 'High-speed endless 3D highway car racing game for mobile and desktop.',
+          name: 'S&S Racing',
+          short_name: 'S&S Racing',
+          description: '3D Mobile Car Racing Game created by Sayod and Subhon (S&S Studios).',
           theme_color: '#0f172a',
           background_color: '#0f172a',
           display: 'fullscreen',
@@ -46,6 +46,7 @@ export default defineConfig(() => {
           ],
         },
         workbox: {
+          maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
           runtimeCaching: [
             {
@@ -83,9 +84,6 @@ export default defineConfig(() => {
           type: 'module',
         },
       }),
-      // Copies src/assets into dist/ so root-relative URLs like
-      // "/src/assets/images/..." (e.g. generate_image output) still resolve
-      // in production builds. Do not remove.
       {
         name: 'copy-unbundled-src-assets',
         apply: 'build',

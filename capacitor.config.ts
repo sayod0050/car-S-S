@@ -13,8 +13,8 @@ interface CapacitorConfig {
 }
 
 const config: CapacitorConfig = {
-  appId: 'com.streetrush3d.game',
-  appName: 'Street Rush 3D',
+  appId: 'com.snsstudios.ssracing',
+  appName: 'S&S Racing',
   webDir: 'dist',
   server: {
     androidScheme: 'https',
