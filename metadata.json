@@ -1,0 +1,6 @@
+{
+  "name": "Street Rush 3D",
+  "description": "An endless 3D highway car racing game with 5 unlockable sports cars, swipe controls, coastal city scenery, and Android PWA + Capacitor support.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
